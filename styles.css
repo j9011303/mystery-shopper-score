@@ -429,6 +429,22 @@ dialog::backdrop {
   cursor: pointer;
 }
 
+/* ===== SOP 是/否 ===== */
+.sop-options .rate-option {
+  flex: 1 1 0;
+  max-width: 160px;
+}
+.rate-option.sop-yes input:checked + span {
+  background: #2f8f5b;
+  border-color: #2f8f5b;
+  color: #fff;
+}
+.rate-option.sop-no input:checked + span {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
 /* ===== Wider screens ===== */
 @media (min-width: 560px) {
   .field-grid {

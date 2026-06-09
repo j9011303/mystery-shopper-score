@@ -1,6 +1,6 @@
 const PAGE_LOADED_AT = Date.now();
 
-// 評分維度與權重（合計 100）
+// 體驗評分維度與權重（滿意度區塊，合計 100）
 const scoreItems = [
   { key: "entry", title: "門口與候位體驗", hint: "主動招呼、訂位確認、候位時間說明是否清楚。", weight: 10 },
   { key: "uniform", title: "儀容與制服", hint: "制服一致、名牌、鞋子、頭髮、整潔度。", weight: 10 },
@@ -21,12 +21,33 @@ const RATING_SCALE = [
   { label: "很滿意", points: 100 },
 ];
 
+// 服務 SOP 細項（是／否），折入總分
+const sopItems = [
+  { key: "sop1", label: "介紹詞有提到加 Line 好友；女生有給髮圈" },
+  { key: "sop2", label: "上湯時有說「太鹹或太淡都可以調整」" },
+  { key: "sop3", label: "加湯時有詢問「會太鹹或太淡嗎」" },
+  { key: "sop4", label: "老顧客／壽星優惠有說明：出示優惠券、證件、拍照打卡" },
+  { key: "sop5", label: "上蛤蠣有給撈網＋說明「有沙或沒開可更換」" },
+  { key: "sop6", label: "上白蝦有給濕紙巾＋說明「剝完蝦可擦手」" },
+  { key: "sop7", label: "雪花魚卷有說明「需煮 5 分鐘以上才會熟」" },
+  { key: "sop8", label: "看到客人手機放桌上，主動提供手機支架" },
+  { key: "sop9", label: "結帳有詢問是否使用湯頭兌換券" },
+  { key: "sop10", label: "結帳有詢問統編／載具" },
+  { key: "sop11", label: "結帳有詢問集點卡" },
+  { key: "sop12", label: "結帳有告知有芳香劑" },
+];
+
+// 滿意度與 SOP 在總分的占比（可調）
+const WEIGHT_SAT = 0.6;
+const WEIGHT_SOP = 0.4;
+
 function pointsForLabel(label) {
   const found = RATING_SCALE.find((s) => s.label === label);
   return found ? found.points : null;
 }
 
 const scoreItemsEl = document.getElementById("scoreItems");
+const sopItemsEl = document.getElementById("sopItems");
 const submittedDialog = document.getElementById("submittedDialog");
 const submittedText = document.getElementById("submittedText");
 const appConfig = window.MYSTERY_SHOPPER_CONFIG || {};
@@ -53,13 +74,11 @@ function renderScoreItems() {
             <span>${s.label}</span>
           </label>`
       ).join("");
-
       const naOption = `
         <label class="rate-option na-option">
           <input type="radio" name="score-${item.key}" value="NA" />
           <span>未觀察</span>
         </label>`;
-
       return `
         <div class="score-item">
           <div class="score-copy">
@@ -75,13 +94,40 @@ function renderScoreItems() {
     .join("");
 }
 
+function renderSopItems() {
+  sopItemsEl.innerHTML = sopItems
+    .map((item, idx) => {
+      return `
+        <div class="score-item">
+          <div class="score-copy">
+            <strong>${idx + 1}. ${item.label}</strong>
+          </div>
+          <div class="score-options sop-options" role="radiogroup" aria-label="${item.label}">
+            <label class="rate-option sop-yes">
+              <input type="radio" name="sop-${item.key}" value="是" />
+              <span>是</span>
+            </label>
+            <label class="rate-option sop-no">
+              <input type="radio" name="sop-${item.key}" value="否" />
+              <span>否</span>
+            </label>
+          </div>
+        </div>`;
+    })
+    .join("");
+}
+
 function hasCriticalIssue() {
   return Array.from(document.querySelectorAll('input[name="critical"]')).some((input) => input.checked);
 }
 
-// 回傳該項目選擇：文字標籤、'NA'，或 null（未作答）
 function getSelection(key) {
   const selected = document.querySelector(`input[name="score-${key}"]:checked`);
+  return selected ? selected.value : null;
+}
+
+function getSopSelection(key) {
+  const selected = document.querySelector(`input[name="sop-${key}"]:checked`);
   return selected ? selected.value : null;
 }
 
@@ -89,11 +135,14 @@ function answeredCount() {
   return scoreItems.filter((item) => getSelection(item.key) !== null).length;
 }
 
-// 背後計分（秘密客看不到）：只計入有評分（非未觀察）的項目並正規化成 0-100。
+function sopAnsweredCount() {
+  return sopItems.filter((item) => getSopSelection(item.key) !== null).length;
+}
+
+// 背後計分：滿意度（正規化 0-100）× 60% + SOP 合格率（是/12 ×100）× 40%
 function computeScore() {
   let earned = 0;
   let applicableWeight = 0;
-
   scoreItems.forEach((item) => {
     const sel = getSelection(item.key);
     if (sel && sel !== "NA") {
@@ -104,8 +153,12 @@ function computeScore() {
       }
     }
   });
+  const satScore = applicableWeight > 0 ? (earned / applicableWeight) * 100 : 0;
 
-  const total = applicableWeight > 0 ? (earned / applicableWeight) * 100 : 0;
+  const yesCount = sopItems.filter((item) => getSopSelection(item.key) === "是").length;
+  const sopScore = (yesCount / sopItems.length) * 100;
+
+  const total = satScore * WEIGHT_SAT + sopScore * WEIGHT_SOP;
   const critical = hasCriticalIssue();
 
   let level;
@@ -115,7 +168,7 @@ function computeScore() {
   else if (total >= 80) level = "警戒";
   else level = "需改善";
 
-  return { total, level, critical };
+  return { satScore, sopScore, total, level, critical };
 }
 
 function bindPhotoPreview() {
@@ -151,11 +204,9 @@ function readFileAsDataUrl(file) {
 async function imageFileToUpload(file) {
   if (!file) return null;
   const originalDataUrl = await readFileAsDataUrl(file);
-
   if (!file.type.startsWith("image/")) {
     return { name: file.name, mimeType: file.type || "application/octet-stream", dataUrl: originalDataUrl, originalSize: file.size };
   }
-
   try {
     const image = await new Promise((resolve, reject) => {
       const img = new Image();
@@ -163,7 +214,6 @@ async function imageFileToUpload(file) {
       img.onerror = reject;
       img.src = originalDataUrl;
     });
-
     const maxSide = 1400;
     const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
     const width = Math.max(1, Math.round(image.width * scale));
@@ -172,7 +222,6 @@ async function imageFileToUpload(file) {
     canvas.width = width;
     canvas.height = height;
     canvas.getContext("2d").drawImage(image, 0, 0, width, height);
-
     return { name: file.name.replace(/\.[^.]+$/, ".jpg"), mimeType: "image/jpeg", dataUrl: canvas.toDataURL("image/jpeg", 0.76), originalSize: file.size };
   } catch (error) {
     return { name: file.name, mimeType: file.type || "image/jpeg", dataUrl: originalDataUrl, originalSize: file.size };
@@ -181,17 +230,23 @@ async function imageFileToUpload(file) {
 
 async function buildPayload(scoreResult) {
   const fileInput = (previewId) => document.querySelector(`input[data-preview="${previewId}"]`);
+
   const scorePayload = {};
   scoreItems.forEach((item) => {
     const sel = getSelection(item.key);
     const pts = sel && sel !== "NA" ? pointsForLabel(sel) : "";
     scorePayload[item.key] = {
       title: item.title,
-      rawScore: sel === null ? "" : sel, // 文字標籤或 'NA'
+      rawScore: sel === null ? "" : sel,
       points: pts,
       weight: item.weight,
       weightedScore: typeof pts === "number" ? (pts / 100) * item.weight : "",
     };
+  });
+
+  const sopPayload = {};
+  sopItems.forEach((item) => {
+    sopPayload[item.key] = getSopSelection(item.key) || "";
   });
 
   return {
@@ -207,10 +262,13 @@ async function buildPayload(scoreResult) {
     shopperCode: document.getElementById("shopperCode").value.trim(),
     billAmount: Number(document.getElementById("billAmount").value || 0),
     totalScore: Number(scoreResult.total.toFixed(1)),
+    satScore: Number(scoreResult.satScore.toFixed(1)),
+    sopScore: Number(scoreResult.sopScore.toFixed(1)),
     level: scoreResult.level,
     visibleSafety: getCheckedLabelText("visibleSafety"),
     criticalItems: getCheckedLabelText("critical"),
     scores: scorePayload,
+    sop: sopPayload,
     goodNotes: document.getElementById("goodNotes").value.trim(),
     badNotes: document.getElementById("badNotes").value.trim(),
     files: {
@@ -224,14 +282,12 @@ async function buildPayload(scoreResult) {
 async function submitToAppsScript(payload) {
   const endpoint = (appConfig.APPS_SCRIPT_URL || "").trim();
   if (!endpoint) return { mode: "demo" };
-
   await fetch(endpoint, {
     method: "POST",
     mode: "no-cors",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify(payload),
   });
-
   return { mode: "apps-script" };
 }
 
@@ -239,8 +295,10 @@ function bindEvents() {
   document.getElementById("scoreForm").addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    if (answeredCount() < scoreItems.length) {
-      alert(`還有 ${scoreItems.length - answeredCount()} 個評分項目未作答，請全部選擇後再送出。`);
+    const missingScore = scoreItems.length - answeredCount();
+    const missingSop = sopItems.length - sopAnsweredCount();
+    if (missingScore > 0 || missingSop > 0) {
+      alert(`還有未作答的項目：體驗評分 ${missingScore} 項、SOP 細項 ${missingSop} 項，請全部選擇後再送出。`);
       return;
     }
 
@@ -261,11 +319,9 @@ function bindEvents() {
         result.mode === "apps-script"
           ? "感謝您的填寫，總部已收到這份評分。"
           : "目前尚未設定送出端點，這次是預覽。";
-
       submittedText.textContent = `${store} 的評分已送出。${
         critical ? "您勾選了需要立即注意的項目，總部會優先處理。" : ""
       }${targetText}`;
-
       if (typeof submittedDialog.showModal === "function") submittedDialog.showModal();
       else alert(submittedText.textContent);
     } catch (error) {
@@ -284,6 +340,7 @@ function bindEvents() {
 }
 
 renderScoreItems();
+renderSopItems();
 setDefaultDate();
 bindPhotoPreview();
 bindEvents();
