@@ -181,10 +181,6 @@ function validatePayload_(payload) {
       throw new Error('Missing required field: ' + field);
     }
   });
-
-  if (!payload.files || !payload.files.receipt || !payload.files.receipt.dataUrl) {
-    throw new Error('Receipt photo is required.');
-  }
 }
 
 // 重複送出防護：同門市 + 同用餐日期 + 同秘密客代號。
