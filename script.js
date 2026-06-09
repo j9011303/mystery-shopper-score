@@ -1,3 +1,5 @@
+const PAGE_LOADED_AT = Date.now();
+
 const scoreItems = [
   {
     key: "entry",
@@ -25,8 +27,8 @@ const scoreItems = [
   },
   {
     key: "food",
-    title: "出餐品質",
-    hint: "鍋底正確、食材完整、溫度、漏單、擺盤。",
+    title: "出餐品質與速度",
+    hint: "鍋底正確、食材完整、溫度、出餐速度、漏單、擺盤。",
     weight: 20,
   },
   {
@@ -60,23 +62,36 @@ const appConfig = window.MYSTERY_SHOPPER_CONFIG || {};
 function setDefaultDate() {
   const dateInput = document.getElementById("visitDate");
   if (!dateInput.value) {
-    dateInput.value = "2026-06-08";
+    // 預設為今天（依使用者裝置時區）
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    dateInput.value = `${yyyy}-${mm}-${dd}`;
+    dateInput.max = `${yyyy}-${mm}-${dd}`; // 不能填未來日期
   }
 }
 
 function renderScoreItems() {
   scoreItemsEl.innerHTML = scoreItems
     .map((item) => {
-      const options = [0, 1, 2, 3, 4, 5]
+      const numberOptions = [0, 1, 2, 3, 4, 5]
         .map(
           (score) => `
             <label>
-              <input type="radio" name="score-${item.key}" value="${score}" ${score === 4 ? "checked" : ""} />
+              <input type="radio" name="score-${item.key}" value="${score}" />
               <span>${score}</span>
             </label>
           `
         )
         .join("");
+
+      const naOption = `
+        <label class="na-option">
+          <input type="radio" name="score-${item.key}" value="NA" />
+          <span>N/A</span>
+        </label>
+      `;
 
       return `
         <div class="score-item">
@@ -86,7 +101,8 @@ function renderScoreItems() {
             <em>權重 ${item.weight} 分</em>
           </div>
           <div class="score-options" aria-label="${item.title}">
-            ${options}
+            ${numberOptions}
+            ${naOption}
           </div>
         </div>
       `;
@@ -98,17 +114,40 @@ function hasCriticalIssue() {
   return Array.from(document.querySelectorAll('input[name="critical"]')).some((input) => input.checked);
 }
 
-function calculateScore() {
-  const total = scoreItems.reduce((sum, item) => {
-    const selected = document.querySelector(`input[name="score-${item.key}"]:checked`);
-    const value = selected ? Number(selected.value) : 0;
-    return sum + (value / 5) * item.weight;
-  }, 0);
+// 回傳該項目選擇：數字 0-5、字串 'NA'，或 null（未作答）
+function getSelection(key) {
+  const selected = document.querySelector(`input[name="score-${key}"]:checked`);
+  if (!selected) return null;
+  return selected.value === "NA" ? "NA" : Number(selected.value);
+}
 
+function answeredCount() {
+  return scoreItems.filter((item) => getSelection(item.key) !== null).length;
+}
+
+// 正規化計分：只計入「有給數字分數」的項目，N/A 與未作答不計入分母。
+function calculateScore() {
+  let earned = 0;
+  let applicableWeight = 0;
+
+  scoreItems.forEach((item) => {
+    const sel = getSelection(item.key);
+    if (typeof sel === "number") {
+      earned += (sel / 5) * item.weight;
+      applicableWeight += item.weight;
+    }
+  });
+
+  const total = applicableWeight > 0 ? (earned / applicableWeight) * 100 : 0;
   const critical = hasCriticalIssue();
+  const allAnswered = answeredCount() === scoreItems.length;
+
   totalScoreEl.textContent = total.toFixed(1);
 
-  if (critical) {
+  if (!allAnswered) {
+    scoreLevelEl.textContent = `填寫中 ${answeredCount()}/${scoreItems.length}`;
+    scoreLevelEl.style.color = "#ffe1a5";
+  } else if (critical) {
     scoreLevelEl.textContent = "一票否決";
     scoreLevelEl.style.color = "#ffd5d0";
   } else if (total >= 90) {
@@ -143,11 +182,6 @@ function bindPhotoPreview() {
       output.appendChild(image);
     });
   });
-}
-
-function getSelectedScore(key) {
-  const selected = document.querySelector(`input[name="score-${key}"]:checked`);
-  return selected ? Number(selected.value) : 0;
 }
 
 function getCheckedLabelText(name) {
@@ -216,16 +250,19 @@ async function buildPayload(score) {
   const fileInput = (previewId) => document.querySelector(`input[data-preview="${previewId}"]`);
   const scorePayload = {};
   scoreItems.forEach((item) => {
+    const sel = getSelection(item.key);
     scorePayload[item.key] = {
       title: item.title,
-      rawScore: getSelectedScore(item.key),
+      rawScore: sel === null ? "" : sel, // 數字、'NA' 或空字串
       weight: item.weight,
-      weightedScore: (getSelectedScore(item.key) / 5) * item.weight,
+      weightedScore: typeof sel === "number" ? (sel / 5) * item.weight : "",
     };
   });
 
   return {
     token: appConfig.FORM_TOKEN || "",
+    hp: document.getElementById("hpField").value, // honeypot，正常應為空
+    elapsedSeconds: Math.round((Date.now() - PAGE_LOADED_AT) / 1000),
     submittedAtClient: new Date().toISOString(),
     userAgent: navigator.userAgent,
     storeName: document.getElementById("storeName").value,
@@ -234,7 +271,7 @@ async function buildPayload(score) {
     guestCount: Number(document.getElementById("guestCount").value || 0),
     shopperCode: document.getElementById("shopperCode").value.trim(),
     billAmount: Number(document.getElementById("billAmount").value || 0),
-    totalScore: score,
+    totalScore: Number(score.toFixed(1)),
     level: scoreLevelEl.textContent,
     visibleSafety: getCheckedLabelText("visibleSafety"),
     criticalItems: getCheckedLabelText("critical"),
@@ -281,6 +318,13 @@ function bindEvents() {
 
   document.getElementById("scoreForm").addEventListener("submit", async (event) => {
     event.preventDefault();
+
+    // 必須每一項都作答（給分或 N/A）才能送出
+    if (answeredCount() < scoreItems.length) {
+      alert(`還有 ${scoreItems.length - answeredCount()} 個評分項目未作答，請全部給分或選 N/A 後再送出。`);
+      return;
+    }
+
     const score = calculateScore();
     const store = document.getElementById("storeName").value;
     const amount = Number(document.getElementById("billAmount").value || 0);
