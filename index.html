@@ -3,16 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>秘密客評分表</title>
+    <title>初殿鍋物秘密客評分表</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main class="page">
       <header class="header">
         <div class="brand-row">
-          <div class="brand-mark">鍋</div>
+          <div class="brand-mark">初</div>
           <div>
-            <p class="eyebrow">秘密客任務</p>
+            <p class="eyebrow">初殿鍋物 · 秘密客任務</p>
             <h1>門市體驗評分表</h1>
           </div>
         </div>
@@ -24,6 +24,13 @@
       </header>
 
       <form id="scoreForm" class="form">
+        <!-- Honeypot：真人看不到，請勿填寫。被填代表是機器人，後端會擋掉。 -->
+        <div class="hp-field" aria-hidden="true">
+          <label>公司名稱（請勿填寫）
+            <input id="hpField" type="text" name="company" tabindex="-1" autocomplete="off" />
+          </label>
+        </div>
+
         <section class="section">
           <div class="section-head">
             <h2>基本資料</h2>
@@ -34,11 +41,9 @@
               門市
               <select id="storeName" required>
                 <option value="">請選擇門市</option>
-                <option>台北八德店</option>
-                <option>台北長安東店</option>
-                <option>新北永和中正店</option>
-                <option>台中漢口店</option>
-                <option>台中青海店</option>
+                <option>初殿鍋物中和店</option>
+                <option>初殿鍋物新莊店</option>
+                <option>初殿鍋物永春店</option>
               </select>
             </label>
             <label>
@@ -73,7 +78,7 @@
             <h2>評分項目</h2>
             <span>0-5 分</span>
           </div>
-          <p class="section-note">0 分代表完全未執行，5 分代表完全符合標準。請依實際觀察給分。</p>
+          <p class="section-note">0 分代表完全未執行，5 分代表完全符合標準。請依實際觀察給分；當天確實無法觀察的項目請選「N/A」，不會被計入扣分。每一項都需作答才能送出。</p>
           <div id="scoreItems" class="score-items"></div>
         </section>
 
