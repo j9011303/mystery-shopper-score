@@ -74,11 +74,6 @@ function renderScoreItems() {
             <span>${s.label}</span>
           </label>`
       ).join("");
-      const naOption = `
-        <label class="rate-option na-option">
-          <input type="radio" name="score-${item.key}" value="NA" />
-          <span>未觀察</span>
-        </label>`;
       return `
         <div class="score-item">
           <div class="score-copy">
@@ -87,7 +82,6 @@ function renderScoreItems() {
           </div>
           <div class="score-options" role="radiogroup" aria-label="${item.title}">
             ${options}
-            ${naOption}
           </div>
         </div>`;
     })
@@ -291,6 +285,20 @@ async function submitToAppsScript(payload) {
   return { mode: "apps-script" };
 }
 
+// 送出成功後把整張表單清空，回到全新的空白畫面（不保留剛剛填的內容）
+function resetForm() {
+  const form = document.getElementById("scoreForm");
+  form.reset();
+  renderScoreItems();
+  renderSopItems();
+  ["mealPreview", "areaPreview", "issuePreview"].forEach((id) => {
+    const out = document.getElementById(id);
+    if (out) out.innerHTML = "";
+  });
+  setDefaultDate();
+  window.scrollTo(0, 0);
+}
+
 function bindEvents() {
   document.getElementById("scoreForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -322,6 +330,8 @@ function bindEvents() {
       submittedText.textContent = `${store} 的評分已送出。${
         critical ? "您勾選了需要立即注意的項目，總部會優先處理。" : ""
       }${targetText}`;
+      // 清空表單，使用者關閉提示後看到的是全新空白畫面
+      resetForm();
       if (typeof submittedDialog.showModal === "function") submittedDialog.showModal();
       else alert(submittedText.textContent);
     } catch (error) {
@@ -336,6 +346,7 @@ function bindEvents() {
 
   document.getElementById("closeDialog").addEventListener("click", () => {
     submittedDialog.close();
+    window.scrollTo(0, 0);
   });
 }
 
