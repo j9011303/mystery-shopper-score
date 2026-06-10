@@ -407,7 +407,7 @@ function renderAdminDashboard_() {
     const id = String(r[COL['報告編號']] || '');
     const viewUrl = base + '?action=report&key=' + encodeURIComponent(CONFIG.ADMIN_KEY) + '&id=' + encodeURIComponent(id);
     dataRows += '<tr>' +
-      '<td class="nowrap"><a href="' + esc_(viewUrl) + '" target="_blank" rel="noopener">查看</a></td>' +
+      '<td class="nowrap"><a href="' + esc_(viewUrl) + '" target="_top">查看</a></td>' +
       '<td class="nowrap">' + submittedText + '</td>' +
       '<td>' + esc_(r[COL['門市']]) + '</td>' +
       '<td class="nowrap">' + esc_(r[COL['用餐日期']]) + '</td>' +
@@ -451,7 +451,7 @@ function renderReportDetail_(reportId) {
   const rows = lastRow > 1 ? sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues() : [];
   const r = rows.filter((x) => String(x[COL['報告編號']]) === String(reportId))[0];
   const base = selfUrl_();
-  const backLink = '<a class="back" href="' + esc_(base) + '?action=admin&key=' + encodeURIComponent(CONFIG.ADMIN_KEY) + '">← 回後台</a>';
+  const backLink = '<a class="back" target="_top" href="' + esc_(base) + '?action=admin&key=' + encodeURIComponent(CONFIG.ADMIN_KEY) + '">← 回後台</a>';
 
   if (!r) {
     return HtmlService.createHtmlOutput('<!doctype html><meta charset="utf-8">' + sharedStyle_() +
